@@ -3,15 +3,6 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-batch_size = 32
-block_size = 8
-max_iters = 5000
-learning_rate = 1e-3
-device = "cuda" if torch.cuda.is_available() else "cpu"
-eval_iters = 200
-torch.manual_seed(1337)
-n_embd = 32
-
 # Find all the characters used in the data
 with open('Data/training_data.txt', 'r', encoding='utf-8') as f:
     text = f.read()
@@ -35,6 +26,17 @@ n = int(0.9*len(data))
 train_data = data[:n]
 val_data = data[n:]
 
+block_size = 8
+train_data[:block_size + 1]
+torch.manual_seed(1337)
+batch_size = 4
+block = 8
+eval_iters = 200
+max_iters = 3000
+learning_rate = 1e-2
+## device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cpu"
+
 def get_batch(split):
     data = train_data if split == "train" else val_data
     ix = torch.randint(len(data) - block_size, (batch_size, ))
@@ -57,15 +59,12 @@ def estimate_loss():
     return out
 
 class BigramLanguageModel(nn.Module):
-    def __init__ (self):
+    def __init__ (self, vocab_size):
         super().__init__()
-        self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
-        self.lm_head = nn.Linear(n_embd, vocab_size)
+        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
 
     def forward(self, idx, targets=None):
-        tok_emb = self.token_embedding_table(idx)
-        logits = self.lm_head(tok_emb)
-
+        logits = self.token_embedding_table(idx)
         if targets is None:
             loss = None
         else:
@@ -85,7 +84,7 @@ class BigramLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
         return idx
 
-model = BigramLanguageModel()
+model = BigramLanguageModel(vocab_size)
 m = model.to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -102,4 +101,4 @@ for iter in range(max_iters):
     optimizer.step()
 
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(decode(m.generate(context, max_new_tokens=10000)[0].tolist()))
+print(decode(m.generate(context, max_new_tokens=1000)[0].tolist()))
