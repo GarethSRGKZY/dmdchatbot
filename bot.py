@@ -159,7 +159,7 @@ class Block(nn.Module):
     
     def forward(self, x):
         x = x + self.sa(self.ln1(x))
-        x = x +self.ffwd(self.ln2(x))
+        x = x + self.ffwd(self.ln2(x))
         return x
 
 class BigramLanguageModel(nn.Module):
@@ -206,7 +206,7 @@ class BigramLanguageModel(nn.Module):
 
 if __name__ == "__main__":
     torch.manual_seed(1337)
-    model = BigramLanguageModel(vocab_size)
+    model = BigramLanguageModel()
     m = model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
