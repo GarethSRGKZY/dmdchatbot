@@ -5,18 +5,19 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-batch_size = 32
-block_size = 8
-max_iters = 5000
-training_time = 1 * 5 * 60
+batch_size = 64
+block_size = 256
+training_time = 8 * 60 * 60
 end_time = time.time() + training_time
-eval_interval = 200
-learning_rate = 1e-3
-#device = "cuda" if torch.cuda.is_available() else "cpu"
-device = "cpu"
+eval_interval = 1
+learning_rate = 3e-4
+device = "cuda" if torch.cuda.is_available() else "cpu"
+#device = "cpu"
 eval_iters = 200
-
-n_embd = 32
+n_embd = 384
+n_head = 6
+n_layer = 6
+dropout = 0.2
 checkpoint_file = "trial.pt"
 
 # Find all the characters used in the data
@@ -42,21 +43,12 @@ n = int(0.9*len(data))
 train_data = data[:n]
 val_data = data[n:]
 
-block_size = 8
-train_data[:block_size + 1]
-batch_size = 4
-block = 8
-eval_iters = 200
-max_iters = 3000
-learning_rate = 1e-2
-## device = "cuda" if torch.cuda.is_available() else "cpu"
-device = "cpu"
-
 def get_batch(split):
     data = train_data if split == "train" else val_data
     ix = torch.randint(len(data) - block_size, (batch_size, ))
     x = torch.stack([data[i: i + block_size] for i in ix])
     y = torch.stack([data[i+1: i + block_size + 1] for i in ix])
+    x, y = x.to(device), y.to(device)
     return x, y
 
 @torch.no_grad()
@@ -110,6 +102,7 @@ class Head(nn.Module):
         self.query = nn.Linear(n_embd, head_size, bias=False)
         self.value = nn.Linear(n_embd, head_size, bias=False)
         self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size)))
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         B, T, C = x.shape
@@ -119,6 +112,7 @@ class Head(nn.Module):
         weights = q @ k.transpose(-2, -1) * C**-0.5
         weights = weights.masked_fill(self.tril[:T, :T] == 0, float("-inf"))
         weights = F.softmax(weights, dim=-1)
+        weights = self.dropout(weights)
 
         v = self.value(x)
         out = weights @ v
@@ -129,10 +123,11 @@ class MultiHeadAttention(nn.Module):
         super().__init__()
         self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
         self.proj = nn.Linear(num_heads * head_size, n_embd)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         out = torch.cat([h(x) for h in self.heads], dim=-1)
-        out = self.proj(out)
+        out = self.dropout(self.proj(out))
         return out
 
 class FeedForward(nn.Module):
@@ -142,6 +137,7 @@ class FeedForward(nn.Module):
             nn.Linear(n_embd, 4 * n_embd),
             nn.ReLU(),
             nn.Linear(4 * n_embd, n_embd),
+            nn.Dropout(dropout),
         )
     
     def forward(self, x):
@@ -166,12 +162,8 @@ class BigramLanguageModel(nn.Module):
         super().__init__()
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
         self.position_embedding_table = nn.Embedding(block_size, n_embd)
-        self.blocks = nn.Sequential(
-            Block(n_embd, n_head=4),
-            Block(n_embd, n_head=4),
-            Block(n_embd, n_head=4),
-            nn.LayerNorm(n_embd),
-        )
+        self.blocks = nn.Sequential(*[Block(n_embd, n_head) for i in range(n_layer)])
+        self.lf_f = nn.LayerNorm(n_embd)
         self.lm_head = nn.Linear(n_embd, vocab_size)
 
     def forward(self, idx, targets=None):
@@ -181,6 +173,7 @@ class BigramLanguageModel(nn.Module):
         pos_emb = self.position_embedding_table(torch.arange(T, device=device))
         x = tok_emb * pos_emb
         x = self.blocks(x)
+        x = self.lf_f(x)
         logits = self.lm_head(tok_emb)
         
         if targets is None:
@@ -213,7 +206,7 @@ if __name__ == "__main__":
     iter = load_checkpoint(model, optimizer)
 
     while time.time() < end_time:
-        if iter % eval_interval == 0 or iter == max_iters - 1:
+        if iter % eval_interval == 0:
             losses = estimate_loss()
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, time remaining: {int(end_time - time.time())} seconds")
             save_checkpoint(model, optimizer, iter, losses["train"], losses["val"])
@@ -228,4 +221,5 @@ if __name__ == "__main__":
         iter += 1
 
     print("Training time reached, saving...")
+    print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, time remaining: {int(end_time - time.time())} seconds")
     save_checkpoint(model, optimizer, iter, losses["train"], losses["val"])
