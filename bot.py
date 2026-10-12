@@ -7,7 +7,7 @@ from torch.nn import functional as F
 
 batch_size = 64
 block_size = 256
-training_time = 8 * 60 * 60
+training_time = 1 * 10 * 60
 end_time = time.time() + training_time
 eval_interval = 1
 learning_rate = 3e-4
@@ -171,10 +171,10 @@ class BigramLanguageModel(nn.Module):
 
         tok_emb = self.token_embedding_table(idx)
         pos_emb = self.position_embedding_table(torch.arange(T, device=device))
-        x = tok_emb * pos_emb
+        x = tok_emb + pos_emb
         x = self.blocks(x)
         x = self.lf_f(x)
-        logits = self.lm_head(tok_emb)
+        logits = self.lm_head(x)
         
         if targets is None:
             loss = None
