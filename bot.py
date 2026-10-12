@@ -15,8 +15,9 @@ learning_rate = 1e-3
 #device = "cuda" if torch.cuda.is_available() else "cpu"
 device = "cpu"
 eval_iters = 200
-torch.manual_seed(1337)
+
 n_embd = 32
+checkpoint_file = "trial.pt"
 
 # Find all the characters used in the data
 with open('Data/training_data.txt', 'r', encoding='utf-8') as f:
@@ -72,6 +73,36 @@ def estimate_loss():
         out[split] = losses.mean()
     model.train()
     return out
+
+def save_checkpoint(model, optimizer, iteration, train_loss, val_loss):
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "iteration": iteration,
+        "train_loss": train_loss,
+        "val_loss": val_loss,
+    }
+
+    torch.save(checkpoint, checkpoint_file)
+
+    print(f"Saved checkpoint of an iteration {iteration}")
+
+def load_checkpoint(model, optimizer):
+    if not os.path.exists(checkpoint_file):
+        print("No checkpoint file, starting from scratch.")
+        return 0
+    
+    print("Loading checkpoint...")
+
+    checkpoint = torch.load(checkpoint__file, map__location=device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizet_state_dict"])
+    iteration = checkpoint["iteration"]
+
+    print(f"Checkpoint loaded, starting from iteration No. {iteration}")
+    print(f"Previous train loss: {checkpoint['train_loss']:.4f}, previous val loss: {checkpoint['val_loss']:.4f}")
+
+    return iteration
 
 class Head(nn.Module):
     def __init__(self, head_size):
@@ -172,25 +203,29 @@ class BigramLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
         return idx
 
-model = BigramLanguageModel(vocab_size)
-m = model.to(device)
+if __name_ == "__main__":
+    torch.manual_seed(1337)
+    model = BigramLanguageModel(vocab_size)
+    m = model.to(device)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-while time.time() < end_time:
-    if iter % eval_interval == 0 or iter == max_iters - 1:
-        losses = estimate_loss()
-        print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, time remaining: {int(end_time - time.time())} seconds")
-    
-    xb, yb = get_batch("train")
-    logits, loss = model(xb, yb)
-    optimizer.zero_grad(set_to_none = True)
-    loss.backward()
-    optimizer.step()
+    iter = load_checkpoint(model, optimizer)
 
-    iter += 1
+    while time.time() < end_time:
+        if iter % eval_interval == 0 or iter == max_iters - 1:
+            losses = estimate_loss()
+            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, time remaining: {int(end_time - time.time())} seconds")
+            save_checkpoint(model, optimizer, iter, losses["train"], losses["val"])
 
-print("Training time reached, saving...")
 
-context = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(decode(m.generate(context, max_new_tokens=1000)[0].tolist()))
+        xb, yb = get_batch("train")
+        logits, loss = model(xb, yb)
+        optimizer.zero_grad(set_to_none = True)
+        loss.backward()
+        optimizer.step()
+
+        iter += 1
+
+    print("Training time reached, saving...")
+    save_checkpoint(model, optimizer, iter, losses["train"], losses["val"])
