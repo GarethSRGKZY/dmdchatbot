@@ -44,7 +44,6 @@ val_data = data[n:]
 
 block_size = 8
 train_data[:block_size + 1]
-torch.manual_seed(1337)
 batch_size = 4
 block = 8
 eval_iters = 200

@@ -23,8 +23,10 @@ while True:
     output = model.generate(context, max_new_tokens)
     generated = decode(output[0].tolist())
     response = generated[len(conversation):]
-    if "<user_1>" in response:
-        response = response.split("<user_1>")[0]
-    print("", response)
+    if not(response.startswith("<user_1>")):
+    
+        if "<user_1>" in response:
+            response = response.split("<user_1>")[0].strip()
+        print("", response)
 
     conversation += response + "\n"
