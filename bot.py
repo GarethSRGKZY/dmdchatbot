@@ -112,7 +112,7 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-class Block(nn_Module):
+class Block(nn.Module):
     def __init__(self, n_embd, n_head):
         super().__init__()
         head_size = n_embd//n_head
