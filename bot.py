@@ -1,4 +1,6 @@
 # IMPORTS
+import os
+import time
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -6,6 +8,9 @@ from torch.nn import functional as F
 batch_size = 32
 block_size = 8
 max_iters = 5000
+training_time = 1 * 5 * 60
+end_time = time.time() + training_time
+eval_interval = 200
 learning_rate = 1e-3
 #device = "cuda" if torch.cuda.is_available() else "cpu"
 device = "cpu"
@@ -172,16 +177,20 @@ m = model.to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-for iter in range(max_iters):
-    if iter % eval_iters == 0 or iter == max_iters - 1:
+while time.time() < end_time:
+    if iter % eval_interval == 0 or iter == max_iters - 1:
         losses = estimate_loss()
-        print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-
+        print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, time remaining: {int(end_time - time.time())} seconds")
+    
     xb, yb = get_batch("train")
     logits, loss = model(xb, yb)
     optimizer.zero_grad(set_to_none = True)
     loss.backward()
     optimizer.step()
+
+    iter += 1
+
+print("Training time reached, saving...")
 
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
 print(decode(m.generate(context, max_new_tokens=1000)[0].tolist()))
