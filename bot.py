@@ -203,7 +203,7 @@ class BigramLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
         return idx
 
-if __name_ == "__main__":
+if __name__ == "__main__":
     torch.manual_seed(1337)
     model = BigramLanguageModel(vocab_size)
     m = model.to(device)
