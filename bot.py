@@ -7,13 +7,13 @@ from torch.nn import functional as F
 
 batch_size = 64
 block_size = 256
-training_time = 1 * 10 * 60
+training_time = 1 * 20 * 60
 end_time = time.time() + training_time
-eval_interval = 1
+eval_interval = 500
 learning_rate = 3e-4
 device = "cuda" if torch.cuda.is_available() else "cpu"
 #device = "cpu"
-eval_iters = 200
+eval_iters = 20
 n_embd = 384
 n_head = 6
 n_layer = 6
@@ -85,9 +85,9 @@ def load_checkpoint(model, optimizer):
     
     print("Loading checkpoint...")
 
-    checkpoint = torch.load(checkpoint__file, map__location=device)
+    checkpoint = torch.load(checkpoint_file, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
-    optimizer.load_state_dict(checkpoint["optimizet_state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     iteration = checkpoint["iteration"]
 
     print(f"Checkpoint loaded, starting from iteration No. {iteration}")
@@ -109,7 +109,7 @@ class Head(nn.Module):
         k = self.key(x)
         q = self.query(x)
 
-        weights = q @ k.transpose(-2, -1) * C**-0.5
+        weights = q @ k.transpose(-2, -1) * k.shape[-1]**-0.5
         weights = weights.masked_fill(self.tril[:T, :T] == 0, float("-inf"))
         weights = F.softmax(weights, dim=-1)
         weights = self.dropout(weights)
@@ -186,11 +186,13 @@ class BigramLanguageModel(nn.Module):
         
         return logits, loss
     
-    def generate(self, idx, max_new_tokens):
-        for i in range(max_new_tokens):
+    def generate(self, idx, max_new_tokens, temperature=0.8, top_k=40):
+        for _ in range(max_new_tokens):
             idx_cond = idx[:, -block_size:]
-            logits, loss = self(idx_cond)
-            logits = logits[:, -1, :]
+            logits, _ = self(idx_cond)
+            logits = logits[:, -1, :] / temperature
+            v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+            logits[logits < v[:, [-1]]] = float("-inf")
             probs = F.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)
             idx = torch.cat((idx, idx_next), dim=1)
