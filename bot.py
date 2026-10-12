@@ -7,7 +7,7 @@ from torch.nn import functional as F
 
 batch_size = 64
 block_size = 256
-training_time = 1 * 20 * 60
+training_time = 1 * 30 * 60
 end_time = time.time() + training_time
 eval_interval = 500
 learning_rate = 3e-4
@@ -186,16 +186,24 @@ class BigramLanguageModel(nn.Module):
         
         return logits, loss
     
-    def generate(self, idx, max_new_tokens, temperature=0.8, top_k=40):
+    def generate(self, idx, max_new_tokens, temperature=0.8, top_k=40, stop_token_id=None):
         for _ in range(max_new_tokens):
             idx_cond = idx[:, -block_size:]
             logits, _ = self(idx_cond)
             logits = logits[:, -1, :] / temperature
-            v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-            logits[logits < v[:, [-1]]] = float("-inf")
+            
+            #To restrict sampling to most likely characters
+            if top_k is not None:
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = float("-inf")
             probs = F.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)
             idx = torch.cat((idx, idx_next), dim=1)
+
+            #Stop after model generates the designated end character
+            if(stop_token_id is not None and torch.all(idx_next == stop_token_id).item()):
+                break
+            
         return idx
 
 if __name__ == "__main__":
