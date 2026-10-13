@@ -93,7 +93,7 @@ def load_checkpoint(model, optimizer):
     print(f"Checkpoint loaded, starting from iteration No. {iteration}")
     print(f"Previous train loss: {checkpoint['train_loss']:.4f}, previous val loss: {checkpoint['val_loss']:.4f}")
 
-    return iteration
+    return iteration, float(checkpoint["val_loss"])
 
 class Head(nn.Module):
     def __init__(self, head_size):
@@ -213,7 +213,7 @@ if __name__ == "__main__":
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.95), weight_decay=0.1)
 
-    iter = load_checkpoint(model, optimizer)
+    iter, best_val = load_checkpoint(model, optimizer)
 
     while time.time() < end_time:
         if iter % eval_interval == 0:
@@ -221,6 +221,9 @@ if __name__ == "__main__":
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, time remaining: {int(end_time - time.time())} seconds")
             save_checkpoint(model, optimizer, iter, losses["train"], losses["val"])
 
+            if losses["val"] < best_val:
+                best_val = losses["val"]
+                save_checkpoint(model, optimizer, iter, losses["train"], losses["val"])
 
         xb, yb = get_batch("train")
         logits, loss = model(xb, yb)
@@ -230,10 +233,6 @@ if __name__ == "__main__":
         optimizer.step()
 
         iter += 1
-
-        if losses["val"] < best_val:
-            best_val = losses["val"]
-            save_checkpoint(model, optimizer, iter, losses["train"], losses["val"])
 
     print("Training time reached, saving...")
     print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, time remaining: {int(end_time - time.time())} seconds")
