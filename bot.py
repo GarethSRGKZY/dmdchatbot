@@ -9,15 +9,15 @@ batch_size = 64
 block_size = 256
 training_time = 1 * 30 * 60
 end_time = time.time() + training_time
-eval_interval = 500
-learning_rate = 3e-4
+eval_interval = 100
+learning_rate = 1e-3
 device = "cuda" if torch.cuda.is_available() else "cpu"
 #device = "cpu"
-eval_iters = 20
-n_embd = 384
+eval_iters = 50
+n_embd = 192
 n_head = 6
-n_layer = 6
-dropout = 0.2
+n_layer = 4
+dropout = 0.3
 checkpoint_file = "trial.pt"
 
 # Find all the characters used in the data
