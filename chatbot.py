@@ -6,9 +6,7 @@ from bot import device
 from bot import checkpoint_file
 
 checkpoint = torch.load(checkpoint_file, map_location=device)
-max_new_tokens = 240
-temperature = 0.75
-top_k = 15
+max_new_tokens = 200
 
 model = BigramLanguageModel().to(device)
 model.load_state_dict(checkpoint["model_state_dict"])
@@ -17,34 +15,18 @@ model.eval()
 conversation = ""
 
 while True:
-    user_input = input("\n<user_1> ").strip()
+    user_input = input("\n<user_1> ")
     if user_input.lower() == "exit":
         break
-
-    conversation += f"<user_1> {user_input}\n<friend> "
-
-    context = torch.tensor(
-        [encode(conversation)],
-        dtype=torch.long,
-        device=device
-    )
-
-    with torch.no_grad():
-        output = model.generate(
-            context,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_k=top_k,
-            stop_token_id=encode("\n")[0]
-        )
-
-    new_tokens = output[0, context.shape[1]:].tolist()
-    generated = decode(new_tokens)
-
-    response = generated.split("\n", 1)[0].strip()
-
-    if not response:
-        response = "Hmm, give me a second to think."
-
-    print("<friend>", response)
+    conversation += f"<user_1> {user_input}\n"
+    context = torch.tensor([encode(conversation)],dtype=torch.long,device=device)
+    output = model.generate(context, max_new_tokens)
+    generated = decode(output[0].tolist())
+    response = generated[len(conversation):]
+    if not(response.startswith("<user_1>")):
+    
+        if "<user_1>" in response:
+            response = response.split("<user_1>")[0].strip()
+        print("", response)
+    
     conversation += response + "\n"

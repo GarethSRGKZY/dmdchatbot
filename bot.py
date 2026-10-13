@@ -82,7 +82,7 @@ def load_checkpoint(model, optimizer):
     if not os.path.exists(checkpoint_file):
         print("No checkpoint file, starting from scratch.")
         return 0
-    
+
     print("Loading checkpoint...")
 
     checkpoint = torch.load(checkpoint_file, map_location=device)
@@ -93,7 +93,7 @@ def load_checkpoint(model, optimizer):
     print(f"Checkpoint loaded, starting from iteration No. {iteration}")
     print(f"Previous train loss: {checkpoint['train_loss']:.4f}, previous val loss: {checkpoint['val_loss']:.4f}")
 
-    return iteration, float(checkpoint["val_loss"])
+    return iteration
 
 class Head(nn.Module):
     def __init__(self, head_size):
@@ -109,7 +109,7 @@ class Head(nn.Module):
         k = self.key(x)
         q = self.query(x)
 
-        weights = q @ k.transpose(-2, -1) * k.shape[-1]**-0.5
+        weights = q @ k.transpose(-2, -1) * C**-0.5
         weights = weights.masked_fill(self.tril[:T, :T] == 0, float("-inf"))
         weights = F.softmax(weights, dim=-1)
         weights = self.dropout(weights)
@@ -139,7 +139,7 @@ class FeedForward(nn.Module):
             nn.Linear(4 * n_embd, n_embd),
             nn.Dropout(dropout),
         )
-    
+
     def forward(self, x):
         return self.net(x)
 
@@ -151,7 +151,7 @@ class Block(nn.Module):
         self.ffwd = FeedForward(n_embd)
         self.ln1 = nn.LayerNorm(n_embd)
         self.ln2 = nn.LayerNorm(n_embd)
-    
+
     def forward(self, x):
         x = x + self.sa(self.ln1(x))
         x = x + self.ffwd(self.ln2(x))
@@ -175,7 +175,7 @@ class BigramLanguageModel(nn.Module):
         x = self.blocks(x)
         x = self.lf_f(x)
         logits = self.lm_head(x)
-        
+
         if targets is None:
             loss = None
         else:
@@ -183,27 +183,17 @@ class BigramLanguageModel(nn.Module):
             logits = logits.view(B*T, C)
             targets = targets.view(B*T)
             loss = F.cross_entropy(logits, targets)
-        
+
         return logits, loss
-    
-    def generate(self, idx, max_new_tokens, temperature=0.8, top_k=40, stop_token_id=None):
-        for _ in range(max_new_tokens):
+
+    def generate(self, idx, max_new_tokens):
+        for i in range(max_new_tokens):
             idx_cond = idx[:, -block_size:]
-            logits, _ = self(idx_cond)
-            logits = logits[:, -1, :] / temperature
-            
-            #To restrict sampling to most likely characters
-            if top_k is not None:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = float("-inf")
+            logits, loss = self(idx_cond)
+            logits = logits[:, -1, :]
             probs = F.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)
             idx = torch.cat((idx, idx_next), dim=1)
-
-            #Stop after model generates the designated end character
-            if(stop_token_id is not None and torch.all(idx_next == stop_token_id).item()):
-                break
-
         return idx
 
 if __name__ == "__main__":
@@ -211,9 +201,9 @@ if __name__ == "__main__":
     model = BigramLanguageModel()
     m = model.to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.95), weight_decay=0.1)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    iter, best_val = load_checkpoint(model, optimizer)
+    iter = load_checkpoint(model, optimizer)
 
     while time.time() < end_time:
         if iter % eval_interval == 0:
@@ -221,19 +211,13 @@ if __name__ == "__main__":
             print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, time remaining: {int(end_time - time.time())} seconds")
             save_checkpoint(model, optimizer, iter, losses["train"], losses["val"])
 
-            if losses["val"] < best_val:
-                best_val = losses["val"]
-                save_checkpoint(model, optimizer, iter, losses["train"], losses["val"])
-
         xb, yb = get_batch("train")
         logits, loss = model(xb, yb)
         optimizer.zero_grad(set_to_none = True)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
 
         iter += 1
 
     print("Training time reached, saving...")
     print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, time remaining: {int(end_time - time.time())} seconds")
-    save_checkpoint(model, optimizer, iter, losses["train"], losses["val"])
