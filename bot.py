@@ -203,7 +203,7 @@ class BigramLanguageModel(nn.Module):
             #Stop after model generates the designated end character
             if(stop_token_id is not None and torch.all(idx_next == stop_token_id).item()):
                 break
-            
+
         return idx
 
 if __name__ == "__main__":
@@ -211,7 +211,7 @@ if __name__ == "__main__":
     model = BigramLanguageModel()
     m = model.to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.95), weight_decay=0.1)
 
     iter = load_checkpoint(model, optimizer)
 
@@ -226,9 +226,14 @@ if __name__ == "__main__":
         logits, loss = model(xb, yb)
         optimizer.zero_grad(set_to_none = True)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
 
         iter += 1
+
+        if losses["val"] < best_val:
+            best_val = losses["val"]
+            save_checkpoint(model, optimizer, iter, losses["train"], losses["val"])
 
     print("Training time reached, saving...")
     print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, time remaining: {int(end_time - time.time())} seconds")
