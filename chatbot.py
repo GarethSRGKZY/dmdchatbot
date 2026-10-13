@@ -15,7 +15,7 @@ def encode(s):
 
 @torch.no_grad()
 def reply(model, history, max_new_tokens=160, temperature=0.5, top_k=8):
-    idx = torch.tensor([encode(history + "<koharu> ")], dtype=torch.long, device=device)
+    idx = torch.tensor([encode(history + "<friend> ")], dtype=torch.long, device=device)
     out = ""
     for _ in range(max_new_tokens):
         logits, _ = model(idx[:, -block_size:])
@@ -32,7 +32,7 @@ def reply(model, history, max_new_tokens=160, temperature=0.5, top_k=8):
     lines = out.split("<user_1>")[0].strip().split("\n")
     if hit_limit and len(lines) > 1:
         lines = lines[:-1]
-    return "<koharu> " + "\n".join(lines)
+    return "<friend> " + "\n".join(lines)
 
 history = []
 
